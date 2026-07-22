@@ -24,9 +24,8 @@ pip install -e ".[dev]"          # editable install with test dependencies
 The package depends on **NumPy** and **SciPy** only.
 Optional: `matplotlib` for the dashboard figure.
 
-> **Note:** The twin imports physics helpers from the companion `flex_base`
-> project at `../flex_base/common/`.  Both directories must be present side by
-> side (they are in the same `digital_twin/` repository).
+The package is fully self-contained — **no companion repositories required**.
+All physics helpers are bundled in `harmonic_drive_twin/flex_common/`.
 
 ## Quick start
 
@@ -142,23 +141,109 @@ Three dials, fitted once in physics-preferred order:
 All other parameters (`T_seal`, `mu_wg`, `mu_v`, …) are set from literature /
 Palmgren values and never touched.
 
+## Isaac Sim 6 integration
+
+The package ships a ready-to-run actuator model for
+[NVIDIA Isaac Sim 6](https://developer.nvidia.com/isaac/sim):
+
+### Quick start (Isaac Sim 6)
+
+```bash
+# Install the twin into the Isaac Sim 6 Python env (one-time)
+isaacsim6-python -m pip install harmonic-drive-twin
+
+# Run the included pendulum example (headless, 10 s simulation)
+isaacsim6-python examples/isaacsim6_pendulum.py
+
+# With GUI viewport
+isaacsim6-python examples/isaacsim6_pendulum.py --gui --size 20
+```
+
+### Embedding the actuator in your own robot
+
+```python
+# In your Isaac Sim 6 script (after SimulationApp starts)
+from harmonic_drive_twin import twin_for_size
+from isaacsim.core.prims import Articulation
+import numpy as np, math
+
+twin = twin_for_size(17)        # TPI 275 size 17, ratio 100:1
+art  = Articulation("/World/MyRobot")
+art.initialize()
+joint_idx = art.get_dof_index("DriveJoint")
+
+for step in range(N):
+    q   = float(art.get_joint_positions(joint_indices=[joint_idx])[0, 0])
+    dq  = float(art.get_joint_velocities(joint_indices=[joint_idx])[0, 0])
+
+    # your torque command (N·m)
+    T_cmd = my_controller(q, dq)
+
+    # compute motor torque + losses via the twin
+    s = twin.solve(abs(T_cmd) * 1e3,           # N·mm
+                   abs(dq) * abs(RATIO),        # motor rad/s
+                   T=20.0)
+    print(f"η = {s['eta']*100:.1f}%  T_in = {s['T_in']*1e-3:.3f} N·m")
+
+    # apply to joint
+    efforts = np.zeros((1, art.num_dof), dtype=np.float32)
+    efforts[0, joint_idx] = float(T_cmd)
+    art.set_joint_efforts(efforts)
+    world.step()
+```
+
+### Example output (pendulum test, size 17, 100:1, T=20°C)
+
+| Time [s] | θ [°] | ω_out [rpm] | T_cmd [N·m] | η [%] | T_churn [N·mm] |
+|---|---|---|---|---|---|
+| 0.00 | 45.0 | 0.0 | −39.3 | 81.7 | 26.1 |
+| 0.50 | 11.3 | −26.8 | −11.4 | 84.1 | 41.9 |
+| 1.00 | −5.3 | −10.4 | 4.5 | 82.9 | 38.6 |
+| 3.00 | 0.0 | 0.0 | 0.0 | 0.0 | 5.4 |
+
+The arm settles from 45° to 0° in ~3 s with η ≈ 80–85% during motion.
+
+### Isaac Sim 6 articulation notes
+
+Isaac Sim 6 uses the **Newton** physics engine. USD articulations must follow
+this structure for Newton to recognise the DOFs:
+
+```
+/World/MyRobot   ← PhysicsArticulationRootAPI
+  /Base          ← RigidBodyAPI (dynamic, fixed to world via PhysicsFixedJoint)
+  /FixedBase     ← PhysicsFixedJoint (body0=Base, no body1 → world-fixed)
+  /Link1         ← RigidBodyAPI + CollisionAPI
+  /Joint1        ← PhysicsRevoluteJoint + PhysicsDriveAPI:angular
+```
+
+Common pitfalls:
+* **Do not** use `prim_path="/World"` in `add_reference_to_stage` — it
+  conflicts with Isaac Sim's own `/World` stage prim.  Use `/World/MyRobot`.
+* **Do not** make the anchor body `kinematicEnabled = true` — Newton does not
+  support kinematic bodies inside articulations.  Use a dynamic body + a
+  fixed joint instead.
+* The joint DOF name is the USD prim name of the `PhysicsRevoluteJoint`.
+
 ## Project structure
 
 ```
-harmonic_drive_twin/       ← this package
+harmonic_drive_twin/
 ├── harmonic_drive_twin/
-│   ├── __init__.py        public API
-│   ├── twin.py            HarmonicDriveTwin class
-│   ├── params.py          parameter dataclasses
-│   ├── catalogue.py       TPI 275 data + validation
+│   ├── __init__.py          public API
+│   ├── twin.py              HarmonicDriveTwin class
+│   ├── params.py            parameter dataclasses
+│   ├── catalogue.py         TPI 275 data + validation
+│   ├── flex_common/         bundled physics helpers (self-contained)
 │   └── py.typed
 ├── tests/
 │   └── test_catalogue_validation.py
 ├── examples/
-│   └── basic_usage.py
+│   ├── basic_usage.py              standalone Python example
+│   ├── isaacsim6_pendulum.py       Isaac Sim 6 pendulum demo
+│   └── isaacsim6_actuator.py       HarmonicDriveActuator class
 └── pyproject.toml
 ```
 
 ## License
 
-Proprietary — Schaeffler AG.  Not for public distribution.
+MIT — see [LICENSE](LICENSE).
