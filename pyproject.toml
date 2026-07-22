@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "harmonic-drive-twin"
+version = "0.1.0"
+description = "Physics-based digital twin for strain-wave (harmonic) gearboxes, validated against Schaeffler TPI 275"
+readme = "README.md"
+license = { text = "Proprietary" }
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=1.24",
+    "scipy>=1.10",
+]
+
+[project.optional-dependencies]
+plot = ["matplotlib>=3.6"]
+dev  = ["pytest>=7", "pytest-cov", "matplotlib>=3.6"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["harmonic_drive_twin*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v"
