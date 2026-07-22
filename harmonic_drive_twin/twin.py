@@ -13,27 +13,16 @@ and torsional stiffness across four catalogue sizes.  See
 """
 from __future__ import annotations
 
-import os
-import sys
 from dataclasses import dataclass, field, replace
 
 import numpy as np
 from scipy.optimize import brentq
 
-# ---------------------------------------------------------------------------
-# Internal imports from the flex_base common package
-# ---------------------------------------------------------------------------
-_COMMON = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "..", "..", "flex_base")
-)
-if _COMMON not in sys.path:
-    sys.path.insert(0, _COMMON)
-
-from common.mesh import MeshParams, mesh_state          # noqa: E402
-from common.profile import sliding_speed_base           # noqa: E402
-from common.ring import RingParams                      # noqa: E402
-from common.friction import normal_force_two_sided_cos2 # noqa: E402
-from common.baseline import BASELINE                    # noqa: E402
+from .flex_common.mesh import MeshParams, mesh_state
+from .flex_common.profile import sliding_speed_base
+from .flex_common.ring import RingParams
+from .flex_common.friction import normal_force_two_sided_cos2
+from .flex_common.baseline import BASELINE
 
 from .params import (                                   # noqa: E402
     FrictionParams, ThermalParams, ToleranceParams, StiffnessChain,
