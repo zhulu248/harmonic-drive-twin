@@ -1,0 +1,149 @@
+%=====================================================================
+%  schaeffler.sty — Schaeffler corporate look & feel for LaTeX (XeLaTeX)
+%---------------------------------------------------------------------
+%  Translates the Schaeffler Word/PowerPoint branding into LaTeX:
+%    - Schaeffler Green #00893D (headings, accents, table headers, rules)
+%    - Carbon Gray     #646464 (body text, H2/H3, captions)
+%    - Light Green     #E6F4EC (alternating table rows)
+%    - Arial (approved fallback for Schaeffler Meta), A4, 2.5 cm margins
+%    - Title page: green marker bar + wordmark logo, gray title, green
+%      subtitle, metadata block, "We pioneer motion" claim
+%    - Body pages: small logo right-aligned in header over a green rule;
+%      footer with copyright + INTERNAL - CONFIDENTIAL + page number
+%  Compile with:  latexmk -xelatex main.tex
+%=====================================================================
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{schaeffler}[2026/07/10 Schaeffler branding for LaTeX]
+
+%----------------------------------------------------- colors
+\RequirePackage{xcolor}
+\definecolor{SchGreen}{HTML}{00893D}   % Schaeffler Green
+\definecolor{SchGray}{HTML}{646464}    % Carbon Gray
+\definecolor{SchGreenLight}{HTML}{E6F4EC} % table row tint
+\definecolor{SchGrayLight}{HTML}{D9D9D9}  % light rule gray
+
+%----------------------------------------------------- fonts (XeLaTeX)
+\RequirePackage{fontspec}
+% Use Liberation Sans as an Arial-compatible substitute (same metrics, open-source).
+% On Windows with Arial installed, change both lines back to {Arial}.
+\setmainfont{Liberation Sans}
+\setsansfont{Liberation Sans}
+% Math stays in Latin Modern Math (journal-grade); text is Arial-equivalent.
+\RequirePackage{amsmath,amssymb}
+
+%----------------------------------------------------- page
+\RequirePackage[a4paper,margin=2.5cm,headheight=32pt,headsep=18pt,
+                footskip=28pt]{geometry}
+\RequirePackage{graphicx}
+\RequirePackage{setspace}
+\setstretch{1.15}
+\AtBeginDocument{\color{SchGray}}          % body text = carbon gray
+\RequirePackage{microtype}
+
+%----------------------------------------------------- header / footer
+\RequirePackage{fancyhdr}
+\fancypagestyle{schaeffler}{%
+  \fancyhf{}%
+  \fancyhead[R]{\includegraphics[height=14pt]{assets/schaeffler_wordmark_green.png}}%
+  \renewcommand{\headrulewidth}{0.8pt}%
+  \renewcommand{\headrule}{\color{SchGreen}\hrule width\headwidth height\headrulewidth}%
+  \fancyfoot[L]{\footnotesize\color{SchGray}Copyright \textcopyright\ Schaeffler, \the\year\ -- All rights reserved.\quad\textbar\quad INTERNAL -- CONFIDENTIAL}%
+  \fancyfoot[R]{\footnotesize\color{SchGray}\thepage}%
+  \renewcommand{\footrulewidth}{0pt}%
+}
+\pagestyle{schaeffler}
+% tocloft/openers switch to "plain" — make plain identical so no page
+% loses the branded header/footer
+\fancypagestyle{plain}{%
+  \fancyhf{}%
+  \fancyhead[R]{\includegraphics[height=14pt]{assets/schaeffler_wordmark_green.png}}%
+  \renewcommand{\headrulewidth}{0.8pt}%
+  \renewcommand{\headrule}{\color{SchGreen}\hrule width\headwidth height\headrulewidth}%
+  \fancyfoot[L]{\footnotesize\color{SchGray}Copyright \textcopyright\ Schaeffler, \the\year\ -- All rights reserved.\quad\textbar\quad INTERNAL -- CONFIDENTIAL}%
+  \fancyfoot[R]{\footnotesize\color{SchGray}\thepage}%
+  \renewcommand{\footrulewidth}{0pt}%
+}
+
+%----------------------------------------------------- section headings
+\RequirePackage{titlesec}
+\titleformat{\section}
+  {\fontsize{16}{19}\bfseries\color{SchGreen}}{\thesection}{0.8em}{}
+\titleformat{\subsection}
+  {\fontsize{13}{16}\bfseries\color{SchGray}}{\thesubsection}{0.8em}{}
+\titleformat{\subsubsection}
+  {\fontsize{11}{14}\bfseries\color{SchGray}}{\thesubsubsection}{0.8em}{}
+\titlespacing*{\section}{0pt}{18pt}{8pt}
+\titlespacing*{\subsection}{0pt}{14pt}{6pt}
+\titlespacing*{\subsubsection}{0pt}{10pt}{4pt}
+
+%----------------------------------------------------- captions
+\RequirePackage[font={small,color=SchGray},labelfont={bf},
+                justification=centering]{caption}
+
+%----------------------------------------------------- tables
+\RequirePackage{booktabs,colortbl,array,tabularx}
+\newcommand{\brandtablehead}[1]{\rowcolor{SchGreen}#1}
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
+% Usage: \rowcolor{SchGreen} header row with \whitebf{...} cells,
+%        then \rowcolor{SchGreenLight} on alternating body rows.
+\newcommand{\whitebf}[1]{\textcolor{white}{\textbf{#1}}}
+
+%----------------------------------------------------- boxes
+\RequirePackage[most]{tcolorbox}
+\newtcolorbox{keyresult}[1][Key result]{%
+  colback=SchGreenLight,colframe=SchGreen,fonttitle=\bfseries\color{white},
+  title={#1},boxrule=0.8pt,arc=1.5pt,left=6pt,right=6pt,top=4pt,bottom=4pt,
+  before skip=10pt,after skip=10pt}
+\newtcolorbox{watchout}[1][Watch out]{%
+  colback=white,colframe=SchGray,fonttitle=\bfseries\color{white},
+  title={#1},boxrule=0.8pt,arc=1.5pt,left=6pt,right=6pt,top=4pt,bottom=4pt,
+  before skip=10pt,after skip=10pt}
+
+%----------------------------------------------------- links / TOC
+\RequirePackage{hyperref}
+\hypersetup{colorlinks=true,linkcolor=SchGreen,urlcolor=SchGreen,
+            citecolor=SchGreen,pdfborder={0 0 0}}
+\RequirePackage{tocloft}
+\renewcommand{\cfttoctitlefont}{\fontsize{16}{19}\bfseries\color{SchGreen}}
+\renewcommand{\cftsecfont}{\bfseries\color{SchGray}}
+\renewcommand{\cftsecpagefont}{\bfseries\color{SchGray}}
+\renewcommand{\cftsubsecfont}{\color{SchGray}}
+\renewcommand{\cftsubsecpagefont}{\color{SchGray}}
+\setlength{\cftbeforesecskip}{7pt}
+
+%----------------------------------------------------- title page
+% \schaefflertitlepage{Title line 1}{Title line 2 (or empty)}{Subtitle}
+%                     {Author}{Date}{Status}
+\newcommand{\schaefflertitlepage}[6]{%
+  \begin{titlepage}%
+    \thispagestyle{empty}%
+    \noindent
+    \begin{minipage}[t]{0.05\textwidth}
+      \textcolor{SchGreen}{\rule{3pt}{56pt}}
+    \end{minipage}%
+    \begin{minipage}[t]{0.55\textwidth}
+      \vspace{6pt}\raggedright
+      \includegraphics[width=0.85\textwidth]{assets/schaeffler_wordmark_green.png}
+    \end{minipage}
+    \vspace{3.2cm}
+
+    {\noindent\fontsize{27}{32}\selectfont\bfseries\color{SchGray}#1\par}%
+    \if\relax\detokenize{#2}\relax\else
+      {\noindent\fontsize{27}{32}\selectfont\bfseries\color{SchGray}#2\par}\fi
+    \vspace{10pt}
+    {\noindent\fontsize{15}{19}\selectfont\color{SchGreen}#3\par}
+    \vspace{14pt}
+    {\noindent\textcolor{SchGreen}{\rule{\textwidth}{1.2pt}}\par}
+    \vspace{20pt}
+    {\noindent\color{SchGray}\fontsize{11}{16}\selectfont
+      \begin{tabular}{@{}p{2.6cm}l@{}}
+        Author:  & #4 \\
+        Date:    & #5 \\
+        Status:  & #6 \\
+      \end{tabular}\par}
+    \vfill
+    \noindent\hfill
+    \includegraphics[width=0.38\textwidth]{assets/we_pioneer_motion_claim.png}
+  \end{titlepage}%
+}
+\endinput
