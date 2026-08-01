@@ -79,63 +79,95 @@ No background in tribology or FEM is needed to use the model.
 \end{keyresult}
 
 %==============================================================
-\section{How the model works (brief)}
+\section{How the model works}
 
-The gearbox loses energy through three independent channels.
-Each channel has a separate physical formula.
+The gearbox loses energy through three independent channels.  This
+section describes each at \textbf{two levels}: \emph{(i)} what the code
+actually computes at run time, and \emph{(ii)} the closed-form expression
+that computation reduces to.  The distinction matters — Channel 1 is a
+per-tooth numerical sum, and the compact formula you may have seen
+elsewhere is its \emph{result}, not its definition.
+
+\begin{keyresult}[Two levels of description]
+A closed form such as \(T_\text{flank}=\mu_k T_\text{out} J/(R\cos\alpha)\)
+is the \textbf{algebraic reduction} of a sum over every engaged tooth,
+valid in the boundary-lubrication regime.  The constant \(J\) is not a
+fixed geometric property — it is a \textbf{load-weighted average of the
+per-tooth sliding kinematics}, recomputed on every call.  The code runs
+the full sum; the formula is only a way to read the answer.
+\end{keyresult}
 
 \subsection{Channel 1 — Tooth-flank friction}
 
-As the wave generator rotates, the flexspline teeth slide against the
-circular-spline teeth.  The sliding velocity is tiny (the wave-generator
-shape, not the tooth pitch, drives it), so the contact operates in the
-\textit{boundary lubrication} regime (\(\lambda \approx 0.1\)).
-In this regime a \textbf{constant kinetic friction coefficient}
-\(\mu_k \approx 0.05\) applies.
+\paragraph{What the code computes.}
+On every call the model places all \(z_f\) flexspline teeth in the
+deformed mesh, keeps those in the \(\pm45^\circ\) engagement arc, and
+negotiates a per-tooth flank force \(f_i\) from a single elastic
+wind-up angle \(\Delta\psi\) with an FE-anchored \(\cos 2\theta\)
+load-sharing shape.  Each engaged tooth also has its own sliding
+integral \(\tilde v_i\) from the wave-generator kinematics
+(\(u=w_0\cos2\theta\), \(v=-\tfrac{w_0}{2}\sin2\theta\), tilt
+\(\chi=-\tfrac{3w_0}{2R}\sin2\theta\)).  The flank loss is the sum
+over all engaged teeth:
+\[
+  T_\text{flank} = \sum_i \mu_i \, f_i \, \tilde v_i .
+\]
+Because the sliding speed is set by the wave-generator ovalization
+\(w_0\) (\(\sim0.3\;\si{mm}\)), not the pitch radius \(R\)
+(\(\sim20\;\si{mm}\)), the contact runs deep in the
+\textit{boundary-lubrication} regime (\(\lambda\approx0.1\)), where the
+per-tooth friction coefficient is essentially constant,
+\(\mu_i\approx\mu_k\approx0.05\).
 
-\begin{center}
-\begin{tabular}{ll}
-\toprule
-Quantity & Formula \\
-\midrule
-Sliding integral & \(J = 0.322\;\si{mm}\) (wave-generator geometry) \\
-Flank loss torque & \(T_\text{flank} = \mu_k \cdot T_\text{out} \cdot J / (R \cos\alpha)\) \\
-\bottomrule
-\end{tabular}
-\end{center}
+\paragraph{What it reduces to.}
+With \(\mu_i\to\mu_k\) constant, and using
+\(T_\text{out}=R\cos\alpha\,\sum_i f_i\), the sum collapses to
+\[
+  T_\text{flank} = \mu_k\,T_\text{out}\,\frac{J}{R\cos\alpha},
+  \qquad
+  J \equiv \frac{\sum_i f_i \tilde v_i}{\sum_i f_i}
+         \approx 0.322\;\si{mm}\ \text{(at rated load)} .
+\]
+Here \(J\) is the \emph{load-weighted mean sliding integral} — the output
+of the per-tooth sum, not an input.  It drifts slightly with load as more
+teeth engage, which the closed-form single number does not capture but the
+code does.
 
 \subsection{Channel 2 — Wave-generator bearing drag}
 
-The thin-section ball bearing (WG bearing) inside the flexspline rolls
-under load.  Its drag follows the \textbf{Palmgren load-dependent formula}
-for rolling-element bearings:
-
+This channel \textbf{is} genuinely closed form.  The thin-section ball
+bearing inside the flexspline rolls under the mesh reaction load, and its
+drag follows the \textbf{Palmgren load-dependent formula} for
+rolling-element bearings:
 \[
-  M_1 = f_1 \cdot P \cdot d_m, \qquad f_1 \approx 5\times10^{-4}
+  M_1 = f_1 \cdot P \cdot d_m, \qquad f_1 \approx 5\times10^{-4},
 \]
-
-where \(P\) is the equivalent radial load and \(d_m\) is the bearing
-pitch diameter.
+where \(P\) is the equivalent radial load (from the summed tooth forces
+plus the wave-generator cam force) and \(d_m\) is the bearing pitch
+diameter.  \(f_1\) is a rolling — not sliding — coefficient, so this
+channel is small.
 
 \subsection{Channel 3 — Churn, seal, and grease drag (load-free losses)}
 
-Even with zero output torque the gearbox loses energy to viscous
-churning of the grease and to the lip seal.  This channel uses the
-\textbf{Palmgren speed-dependent formula}:
-
+Also genuinely closed form.  Even at zero output torque the gearbox loses
+energy to viscous churning of the grease and to the lip seal.  This
+channel uses the \textbf{Palmgren speed-dependent formula}:
 \[
-  M_0 = 10^{-7} \cdot f_0 \cdot (\nu\, n)^{2/3} \cdot d_m^3
+  M_0 = 10^{-7} \cdot f_0 \cdot (\nu\, n)^{2/3} \cdot d_m^3,
 \]
-
 where \(\nu\) is the grease kinematic viscosity (temperature-dependent),
-\(n\) is the rotational speed, and \(f_0\) is a geometry factor fitted
-to the no-load running-torque table in the catalogue.
+\(n\) is the rotational speed, and \(f_0\) is a geometry factor fitted to
+the no-load running-torque table in the catalogue.  This is the only
+channel with an explicit speed term, which is why speed enters efficiency
+mainly through it.
 
 \begin{watchout}[Most important insight]
 At rated load and speed, \textbf{channel 3 (churn/seal) carries
 \(\approx 60\,\%\) of total loss} — not the teeth.
 The catalogue efficiency band is governed by the load-free channel,
 not by flank friction.  This is the opposite of a conventional involute gear.
+It is also why the per-tooth detail in Channel 1, while physically
+faithful, has limited leverage on the headline efficiency number.
 \end{watchout}
 
 %==============================================================

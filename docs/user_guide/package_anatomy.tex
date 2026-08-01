@@ -1,0 +1,441 @@
+%=============================================================
+%  Harmonic-Drive Digital Twin — Package Anatomy
+%  Compile: latexmk -xelatex package_anatomy.tex
+%=============================================================
+\documentclass[11pt,a4paper]{article}
+\usepackage{schaeffler}          % Schaeffler branding (Liberation Sans, green)
+\usepackage{fancyvrb}
+
+% Box-drawing glyphs in the directory trees need a mono font that has them.
+\setmonofont{DejaVu Sans Mono}[Scale=0.86]
+
+%---- metadata ------------------------------------------------
+\hypersetup{
+  pdftitle={Harmonic-Drive Digital Twin — Package Anatomy},
+  pdfauthor={Lu Zhu},
+  pdfsubject={What is inside the released package, piece by piece},
+}
+
+\newcommand{\pkg}[1]{\texttt{#1}}
+
+\begin{document}
+
+%==============================================================
+\schaefflertitlepage
+  {Harmonic-Drive Digital Twin}
+  {Package Anatomy}
+  {What is inside the release · piece by piece · in plain language}
+  {Lu Zhu}
+  {2026}
+  {Rev 1.0 — Internal}
+
+\tableofcontents
+\clearpage
+
+%==============================================================
+\section{Read this first}
+
+This document explains \textbf{what you are shipping} when you release
+\pkg{harmonic-drive-twin}, piece by piece, in plain language.
+
+It is written for two readers: \textbf{you}, deciding what belongs in the
+release; and \textbf{a stranger} who has just cloned the repository and wants
+to know what they are looking at.
+
+\begin{keyresult}[The whole package in one paragraph]
+The package is a \textbf{physics calculator for a strain-wave gearbox}. You
+hand it an operating point --- ``I need 30\,N\,m out, the motor is spinning at
+2000\,rpm, it is 20\,°C in there'' --- and it hands back the motor torque you
+actually need, the efficiency, where every watt of loss went, and how much the
+gearbox twists under that load. Everything else in the repository exists to
+support, prove, or demonstrate that one calculation.
+\end{keyresult}
+
+Its companion, the \emph{User Guide}, tells a reader \textbf{how to drive}.
+This document tells them \textbf{what is under the hood}.
+
+%==============================================================
+\section{The map}
+
+\begin{Verbatim}[fontsize=\footnotesize,xleftmargin=6pt]
+harmonic-drive-twin/
+│
+├── pyproject.toml       ← the shipping label (name, version, deps)
+├── LICENSE              ← MIT — permission to use it
+├── README.md            ← the shop window (what it does, quick start)
+├── .gitignore           ← what never leaves your machine
+│
+├── harmonic_drive_twin/ ← THE PRODUCT — all of the model is here
+│   ├── __init__.py          the front door
+│   ├── twin.py              the engine
+│   ├── params.py            the dials
+│   ├── catalogue.py         the reality check
+│   ├── py.typed             flag saying "type hints included"
+│   └── flex_common/         the physics foundation (7 modules)
+│       ├── baseline.py   ellipse.py    mesh.py     ring.py
+│       └── friction.py   profile.py    teeth.py
+│
+├── examples/            ← on-ramps: three runnable scripts
+│   ├── basic_usage.py
+│   ├── isaacsim6_actuator.py
+│   └── isaacsim6_pendulum.py
+│
+├── tests/               ← the proof it still works
+│   └── test_catalogue_validation.py
+│
+└── docs/                ← the manual
+    └── user_guide/
+        ├── user_guide.pdf        10-page branded guide
+        ├── package_anatomy.pdf   this document
+        └── assets/               logos + pendulum result figure
+\end{Verbatim}
+
+Total: \textbf{2\,947 lines of Python} in the model itself (3\,633 counting
+examples and tests). Small --- and that is a feature. A reviewer can read the
+whole model in an afternoon.
+
+%==============================================================
+\section{The four layers}
+
+The package is built in layers. Each layer knows only about the ones below it.
+This is why it stays understandable.
+
+\begin{Verbatim}[fontsize=\small,xleftmargin=20pt]
+    ┌────────────────────────────────────────────┐
+ 4  │  __init__.py    the front door             │  ← users import this
+    ├────────────────────────────────────────────┤
+ 3  │  twin.py        the engine                 │  ← does the work
+    ├────────────────────────────────────────────┤
+ 2  │  params.py      the dials                  │  ← what you may change
+    ├────────────────────────────────────────────┤
+ 1  │  flex_common/   the physics foundation     │  ← the equations
+    └────────────────────────────────────────────┘
+
+  catalogue.py sits alongside 2–3 and asks: "does this match reality?"
+\end{Verbatim}
+
+%--------------------------------------------------------------
+\subsection{Layer 1 --- \pkg{flex\_common/} : the physics foundation}
+
+\emph{Roughly 1\,300 lines across seven small modules. Each is one piece of
+textbook mechanics.}
+
+These are the equations describing \emph{how a harmonic drive deforms and
+meshes}. They began as the shared library of the multi-topic FEA study and were
+bundled into the package so it stands alone --- a user does \textbf{not} need
+the research repository to run the model.
+
+\renewcommand{\arraystretch}{1.25}
+\begin{tabularx}{\textwidth}{@{}l r Y@{}}
+\rowcolor{SchGreen}
+\whitebf{Module} & \whitebf{Lines} & \whitebf{In one sentence} \\
+\pkg{baseline.py} & 79 & \textbf{The reference part.} One agreed set of numbers
+--- $R=20$\,mm, wall 0.4\,mm, ovalization 0.30\,mm, 200/202 teeth --- so every
+other module is talking about the same gearbox. \\
+\rowcolor{SchGreenLight}
+\pkg{ring.py} & 170 & \textbf{The flexspline as a thin ring.} Squash a thin
+steel ring into an ellipse; this gives the bending moment, shear and contact
+pressure in closed form. Handles both ``tied to the cam'' and ``cam can only
+push outward''. \\
+\pkg{ellipse.py} & 111 & \textbf{A real ellipse is not a pure $\cos2\theta$.}
+Decomposes the true elliptical shape into harmonics and adds the ring response
+to each. The correction term for \pkg{ring.py}. \\
+\rowcolor{SchGreenLight}
+\pkg{mesh.py} & 305 & \textbf{Which teeth are touching, right now.} Given the
+wave-generator angle it says which flexspline teeth line up with which
+circular-spline spaces, and how each tooth moves: radial breathing, tangential
+slide, tilt. The heart of the kinematics. \\
+\pkg{profile.py} & 433 & \textbf{What shape the teeth must be.} Synthesises the
+circular-spline flank as the conjugate envelope of the flexspline tooth swept
+through the mesh, and computes the flank sliding speed --- which feeds friction
+and wear. \\
+\rowcolor{SchGreenLight}
+\pkg{friction.py} & 74 & \textbf{Why it takes torque to spin an unloaded
+drive.} Without friction the no-load torque is exactly zero; this shows why,
+and what friction adds. \\
+\pkg{teeth.py} & 184 & \textbf{Tooth-root stress.} Lewis cantilever bending
+plus Dolan--Broghamer fillet concentration --- the fatigue surrogate. \\
+\end{tabularx}
+
+\vspace{6pt}
+\noindent\emph{Gentle note:} a user of the twin never needs to open these. They
+are the foundation under the floorboards. But they are what makes the model
+\emph{physics-based} rather than a curve fit --- and a skeptical reviewer will
+go straight here.
+
+%--------------------------------------------------------------
+\subsection{Layer 2 --- \pkg{params.py} : the dials}
+
+\emph{425 lines. Four dataclasses. This is ``everything you are allowed to
+change''.}
+
+Instead of magic numbers scattered through the code, every adjustable quantity
+lives in one of four labelled boxes.
+
+\begin{tabularx}{\textwidth}{@{}l Y Y@{}}
+\rowcolor{SchGreen}
+\whitebf{Dataclass} & \whitebf{What it holds} & \whitebf{Example knobs} \\
+\pkg{FrictionParams} & How things rub & boundary friction coefficient, Stribeck
+transition speed, wave-generator bearing coefficient, grease churn factor \\
+\rowcolor{SchGreenLight}
+\pkg{ThermalParams} & How temperature changes things & oil viscosity versus
+temperature, thermal expansion of clearances \\
+\pkg{ToleranceParams} & Manufacturing imperfection & backlash, tooth-to-tooth
+pitch scatter (used for Monte-Carlo runs) \\
+\rowcolor{SchGreenLight}
+\pkg{StiffnessChain} & How the drive twists & the series chain: cup +
+wave-generator bearing + mesh + output bearing \\
+\end{tabularx}
+
+\vspace{6pt}
+\noindent\textbf{Why this matters for release:} a user adapting the twin to
+\emph{their} gearbox edits parameters here --- never the equations. That is the
+contract. Units are stated once, at the top of the file, and hold everywhere:
+\textbf{mm, N, N\,mm, rad/s, °C}.
+
+%--------------------------------------------------------------
+\subsection{Layer 3 --- \pkg{twin.py} : the engine}
+
+\emph{787 lines. One class, \pkg{HarmonicDriveTwin}, plus three contact
+helpers.}
+
+This is the actual model. It takes the equations from Layer 1, the numbers from
+Layer 2, and answers questions. The main method is \pkg{solve()}:
+
+\begin{Verbatim}[fontsize=\small,xleftmargin=10pt]
+         you give it                     it gives you back
+   ┌──────────────────────┐    ┌─────────────────────────────────┐
+   │  T_out    torque     │    │  T_in       motor torque needed │
+   │  omega_in speed      │ ─▶ │  eta        efficiency          │
+   │  T        temp °C    │    │  T_teeth_in ┐                   │
+   └──────────────────────┘    │  T_wg_in    ├ where the loss    │
+                               │  T_churn    ┘ actually went     │
+                               │  dpsi_total how much it twists  │
+                               │  K_total    torsional stiffness │
+                               └─────────────────────────────────┘
+\end{Verbatim}
+
+The loss split into \textbf{three channels} is the model's central idea:
+
+\begin{enumerate}
+  \item \pkg{T\_teeth\_in} --- tooth flanks rubbing. Boundary-lubricated, not
+        oil-film.
+  \item \pkg{T\_wg\_in} --- the wave-generator bearing rolling.
+  \item \pkg{T\_churn} --- grease churn and seal drag. Load-\emph{independent},
+        and at rated torque it is the \textbf{biggest} of the three.
+\end{enumerate}
+
+\begin{keyresult}[Why the third channel matters]
+The load-free churn/seal channel is the non-obvious finding the study produced,
+and it is why catalogue efficiency sits at 67--78\,\% rather than the
+$\approx$\,90\,\% a tooth-friction-only model predicts.
+\end{keyresult}
+
+Beyond \pkg{solve()}, the class also answers:
+
+\begin{tabularx}{\textwidth}{@{}l Y@{}}
+\rowcolor{SchGreen}
+\whitebf{Method} & \whitebf{Question it answers} \\
+\pkg{efficiency\_curve()} & How does $\eta$ vary with torque? \\
+\rowcolor{SchGreenLight}
+\pkg{efficiency\_map()} & 2-D $\eta$ map over torque $\times$ speed \\
+\pkg{hysteresis()} / \pkg{hysteresis\_dahl()} & What does the torque--windup
+loop look like? (lost motion) \\
+\rowcolor{SchGreenLight}
+\pkg{breakaway\_input\_torque()} & What torque starts it from cold rest? \\
+\pkg{backdrive\_threshold()} & Can the load push the motor backwards? \\
+\rowcolor{SchGreenLight}
+\pkg{monte\_carlo()} & What is the scatter if tooth clearances vary? \\
+\pkg{warmup()} & Thermal transient and grease life \\
+\rowcolor{SchGreenLight}
+\pkg{wear\_life()} & Archard flank wear over a lifetime \\
+\pkg{hertz\_flank\_summary()} & Contact pressure and oil film at the
+hardest-loaded tooth \\
+\end{tabularx}
+
+\vspace{6pt}
+\noindent Plus three standalone helpers anyone can use:
+\pkg{hertz\_flank()},\newline
+\pkg{ehl\_lambda()} and \pkg{wg\_bearing\_stiffness()}.
+
+%--------------------------------------------------------------
+\subsection{Layer 4 --- \pkg{\_\_init\_\_.py} : the front door}
+
+\emph{129 lines, almost all of it documentation.} Its job is \emph{curation}:
+
+\begin{enumerate}
+  \item \textbf{Decides what is public.} The \pkg{\_\_all\_\_} list is the
+        promise: these 13 names are the supported API. Everything else is
+        internal and may change.
+  \item \textbf{Provides \pkg{solve\_point()}} --- a one-line functional
+        wrapper so a casual user never has to instantiate a class:
+        \pkg{solve\_point(T\_out\_Nm=30.0, speed\_rpm=2000)} $\rightarrow$
+        $\eta = 77.9$\,\%.
+  \item \textbf{Carries the quick-start docstring}, written as doctests --- so
+        the examples in the documentation are \emph{executable} and cannot
+        silently go stale.
+\end{enumerate}
+
+%==============================================================
+\section{The reality check}
+
+This is what separates a digital twin from a plausible-looking spreadsheet.
+
+\subsection{\pkg{catalogue.py} (250 lines)}
+
+Holds the digitised \textbf{Schaeffler TPI 275} table (series RT1-H-CS,
+$i = 100$, $+20$\,°C) for four frame sizes:
+
+\begin{tabularx}{\textwidth}{@{}l Y r r r r@{}}
+\rowcolor{SchGreen}
+\whitebf{Symbol} & \whitebf{Quantity} & \whitebf{14} & \whitebf{17} &
+\whitebf{20} & \whitebf{25} \\
+$R$ & pitch radius [mm] & 17.78 & 21.59 & 25.40 & 31.75 \\
+\rowcolor{SchGreenLight}
+$T_N$ & rated torque [N\,m] & 10.0 & 31.0 & 52.0 & 87.0 \\
+$\eta$ & efficiency [\%] & 67.0 & 77.0 & 77.0 & 77.0 \\
+\rowcolor{SchGreenLight}
+$T_\mathrm{nlrt}$ & no-load running torque [mN\,m] & 35 & 51 & 105 & 195 \\
+$T_\mathrm{nlst}$ & starting torque [mN\,m] & 21 & 29 & 37 & 69 \\
+\rowcolor{SchGreenLight}
+$T_\mathrm{bt}$ & back-driving torque [N\,m] & 2.21 & 3.06 & 3.89 & 7.26 \\
+$K_1$ & torsional stiffness, low [N\,m/rad] & 4\,700 & 10\,000 & 16\,000 &
+31\,000 \\
+\rowcolor{SchGreenLight}
+$K_3$ & torsional stiffness, high [N\,m/rad] & 7\,100 & 16\,000 & 29\,000 &
+57\,000 \\
+\end{tabularx}
+
+\vspace{8pt}
+\noindent And three functions: \pkg{twin\_for\_size(14|17|20|25)} returns a twin
+pre-scaled to that catalogue size; \pkg{calibrate()} derives the three global
+calibration dials from the table; \pkg{validate()} runs everything and reports
+how close the model lands.
+
+\begin{keyresult}[The headline claim of the whole package]
+Five independent catalogue quantities, across four sizes, matched with only
+\textbf{three global calibration dials} and \textbf{zero per-size fitting}.
+Torsional stiffness uses no fitting at all --- it comes from the FE-anchored
+physical chain.
+\end{keyresult}
+
+\subsection{\pkg{tests/test\_catalogue\_validation.py} (183 lines)}
+
+Four tests that keep that claim honest:
+
+\begin{tabularx}{\textwidth}{@{}l Y@{}}
+\rowcolor{SchGreen}
+\whitebf{Test} & \whitebf{Guards against} \\
+\pkg{test\_calibration\_reproducible()} & calibration drifting when code
+changes \\
+\rowcolor{SchGreenLight}
+\pkg{test\_solve\_point\_size17()} & the size-17 number (75.8\,\% versus
+catalogue 77\,$\pm$\,3\,\%) moving \\
+\pkg{test\_solve\_point\_default()} & the baseline number (77.9\,\%) moving \\
+\rowcolor{SchGreenLight}
+\pkg{test\_twin\_for\_invalid\_size()} & silently accepting a size that does
+not exist \\
+\end{tabularx}
+
+\vspace{6pt}
+\noindent Run them with \pkg{pytest}. If they pass, the numbers in the README
+are true.
+
+%==============================================================
+\section{The on-ramps --- \pkg{examples/}}
+
+Three scripts, in increasing order of ambition.
+
+\begin{tabularx}{\textwidth}{@{}l r Y@{}}
+\rowcolor{SchGreen}
+\whitebf{Script} & \whitebf{Lines} & \whitebf{What it shows} \\
+\pkg{basic\_usage.py} & 77 & \textbf{Start here.} Pure Python, no simulator.
+Single-point solve, catalogue-preset twin, full validation table printed to the
+terminal. \\
+\rowcolor{SchGreenLight}
+\pkg{isaacsim6\_actuator.py} & 156 & The \textbf{reusable class} ---
+\pkg{HarmonicDriveActuator}. Drop it into any Isaac Sim robot script: it reads
+joint state, computes the $\eta$-corrected motor torque, applies it, and logs
+the loss breakdown. \\
+\pkg{isaacsim6\_pendulum.py} & 270 & The \textbf{complete demo.} A 1-DOF
+pendulum (2\,kg arm, 1\,m) driven through a real RT1-H-17-100-CS. Builds the
+scene programmatically, runs headless or with GUI, writes CSV. The arm settles
+45° $\rightarrow$ 0° in about 3\,s at $\eta$ 80--85\,\%. \\
+\end{tabularx}
+
+\vspace{6pt}
+\noindent The pendulum example is the one that makes the model \emph{credible
+to a roboticist} --- it proves the twin runs inside a real physics engine at
+real-time step rates, not only in a notebook.
+
+%==============================================================
+\section{How a user actually meets the package}
+
+There are three depths, and most people stop at the first.
+
+\begin{Verbatim}[fontsize=\small,xleftmargin=6pt]
+DEPTH 1 · "just give me a number"     → solve_point(30.0, 2000)
+          one line, no classes          ~30 seconds to first result
+
+DEPTH 2 · "model my specific gearbox" → twin_for_size(17), or build a
+          swap in your own parameters   HarmonicDriveTwin with your own
+                                        MeshParams / FrictionParams
+
+DEPTH 3 · "put it in my robot sim"    → copy isaacsim6_actuator.py,
+          live actuator in Isaac Sim    call .step() each frame
+\end{Verbatim}
+
+%==============================================================
+\section{Before you release --- three things to look at}
+
+\begin{watchout}[Open decisions, not blockers]
+\begin{enumerate}
+  \item \textbf{Schaeffler logo files are tracked in a public MIT repository.}
+        \pkg{assets/schaeffler\_wordmark\_green.png} and
+        \pkg{we\_pioneer\_motion\_claim.png} are corporate trademarks sitting
+        under an MIT license header. Consider shipping an unbranded PDF
+        publicly and keeping the branded build internal. The same applies to
+        the \emph{INTERNAL --- CONFIDENTIAL} footer on these pages.
+  \item \textbf{LaTeX build artefacts were tracked.} The \pkg{.aux},
+        \pkg{.fls}, \pkg{.fdb\_latexmk}, \pkg{.log}, \pkg{.out}, \pkg{.toc},
+        \pkg{.xdv} and \pkg{build.log} files added churn to every commit. Ship
+        \pkg{.pdf} and \pkg{.tex}; ignore the rest. \emph{(Now fixed.)}
+  \item \textbf{Uncommitted documentation changes.} Commit or revert everything
+        under \pkg{docs/user\_guide/} before tagging a release.
+\end{enumerate}
+\end{watchout}
+
+\noindent Good news: \pkg{build/}, \pkg{*.egg-info/}, \pkg{.pytest\_cache/} and
+\pkg{\_\_pycache\_\_/} are already correctly ignored, and the package tree
+itself is clean.
+
+%==============================================================
+\section{One-page summary}
+
+\begin{tabularx}{\textwidth}{@{}l r Y l@{}}
+\rowcolor{SchGreen}
+\whitebf{Piece} & \whitebf{Size} & \whitebf{Role} & \whitebf{User opens it?} \\
+\pkg{pyproject.toml} & 37 & shipping label & no \\
+\rowcolor{SchGreenLight}
+\pkg{README.md} & 249 & shop window & \textbf{yes, first} \\
+\pkg{\_\_init\_\_.py} & 129 & front door, public API & indirectly \\
+\rowcolor{SchGreenLight}
+\pkg{twin.py} & 787 & the engine & if curious \\
+\pkg{params.py} & 425 & the dials & \textbf{yes, to adapt} \\
+\rowcolor{SchGreenLight}
+\pkg{catalogue.py} & 250 & reality check & to validate \\
+\pkg{flex\_common/} $\times$ 7 & $\approx$1\,300 & physics foundation &
+rarely \\
+\rowcolor{SchGreenLight}
+\pkg{examples/} $\times$ 3 & 503 & on-ramps & \textbf{yes, to start} \\
+\pkg{tests/} & 183 & proof & to verify \\
+\rowcolor{SchGreenLight}
+\pkg{docs/user\_guide.pdf} & 10 pp & the manual & \textbf{yes} \\
+\end{tabularx}
+
+\vspace{10pt}
+\noindent Dependencies: \textbf{NumPy and SciPy only.} Matplotlib optional, for
+plots. Python $\geq$ 3.10. No compiled extensions, no companion repository, no
+license server. That is why it installs anywhere in one command.
+
+\end{document}

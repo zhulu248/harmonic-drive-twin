@@ -1,9 +1,28 @@
+# ── Python ──────────────────────────────────────────────────
 __pycache__/
 *.py[cod]
 *.egg-info/
 dist/
 build/
 .pytest_cache/
+
+# ── Heavy data / geometry ───────────────────────────────────
 *.npz
 *.stl
 *.step
+
+# ── LaTeX build artefacts ───────────────────────────────────
+# Ship only the .tex source and the finished .pdf.
+*.aux
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.toc
+*.xdv
+*.synctex.gz
+*.bbl
+*.blg
+*.nav
+*.snm
+*.vrb
